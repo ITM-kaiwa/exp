@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTS & STT Gemini Chat Test App</title>
+  <meta name="description" content="Minimum environment Web App for testing Text-To-Speech and Speech-To-Text with Google Gemini AI.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-title">
+        <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+        <h1>AI Voice & Chat Studio</h1>
+      </div>
+
+      <div class="header-controls">
+        <div class="tts-badge-container">
+          <span class="badge-label">TTS Model:</span>
+          <span id="tts-model-badge" class="badge-tag">ja-JP-Neural2-B</span>
+        </div>
+
+        <div class="dropdown-container">
+          <label for="tts-model-select" class="sr-only">TTS Model Selector</label>
+          <select id="tts-model-select" class="tts-select">
+            <optgroup label="Neural2 (High Quality)">
+              <option value="ja-JP-Neural2-B" selected>ja-JP-Neural2-B (Female)</option>
+              <option value="ja-JP-Neural2-C">ja-JP-Neural2-C (Male)</option>
+              <option value="ja-JP-Neural2-D">ja-JP-Neural2-D (Male)</option>
+            </optgroup>
+            <optgroup label="Wavenet">
+              <option value="ja-JP-Wavenet-A">ja-JP-Wavenet-A (Female)</option>
+              <option value="ja-JP-Wavenet-B">ja-JP-Wavenet-B (Female)</option>
+              <option value="ja-JP-Wavenet-C">ja-JP-Wavenet-C (Male)</option>
+              <option value="ja-JP-Wavenet-D">ja-JP-Wavenet-D (Male)</option>
+            </optgroup>
+            <optgroup label="Standard">
+              <option value="ja-JP-Standard-A">ja-JP-Standard-A (Female)</option>
+              <option value="ja-JP-Standard-B">ja-JP-Standard-B (Female)</option>
+              <option value="ja-JP-Standard-C">ja-JP-Standard-C (Male)</option>
+              <option value="ja-JP-Standard-D">ja-JP-Standard-D (Male)</option>
+            </optgroup>
+            <optgroup label="Chirp3 HD">
+              <option value="ja-JP-Chirp3-HD-Aoede">ja-JP-Chirp3-HD-Aoede (Female)</option>
+              <option value="ja-JP-Chirp3-HD-Puck">ja-JP-Chirp3-HD-Puck (Male)</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div class="api-key-status" id="api-key-status" title="Google API Key Status">
+          <span class="status-dot unconfigured" id="status-dot"></span>
+          <span class="status-text" id="status-text">API Key: 未設定</span>
+          <button id="reset-key-btn" class="btn-reset-key hidden" title="API Keyをリセット">リセット</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Chat Window -->
+    <main class="chat-window" id="chat-window">
+      <div class="system-welcome-card" id="welcome-card">
+        <div class="welcome-icon">🔑</div>
+        <h2>Google API Keyの設定</h2>
+        <p>アプリを使用する前に、お持ちの <strong>Google API Key</strong> を下のチャット入力欄に入力し、<strong>送信ボタン</strong>を押してください。</p>
+        <div class="key-hint">※ API Keyはブラウザ内(localStorage)に安全に保存されます。</div>
+      </div>
+    </main>
+
+    <!-- Footer Input Bar -->
+    <footer class="app-footer">
+      <div class="stt-status-bar hidden" id="stt-status-bar">
+        <span class="pulse-red"></span>
+        <span class="stt-status-text">音声認識中... 話しかけてください</span>
+      </div>
+
+      <div class="input-container">
+        <input type="text" id="chat-input" class="chat-input" placeholder="メッセージを入力、またはAPI Keyを入力してください..." autocomplete="off">
+        
+        <button id="mic-btn" class="icon-btn mic-btn" title="音声入力 (マイク)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </button>
+
+        <button id="send-btn" class="icon-btn send-btn" title="送信">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
