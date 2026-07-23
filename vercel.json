@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/chat",
-      "destination": "/api/chat.py"
+      "destination": "/api/index.py"
     },
     {
       "source": "/api/tts",
-      "destination": "/api/tts.py"
+      "destination": "/api/index.py"
     }
   ]
 }
