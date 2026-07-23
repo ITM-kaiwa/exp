@@ -1,12 +1,18 @@
 {
+  "functions": {
+    "api/*.py": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
     {
       "source": "/api/chat",
-      "destination": "/api/index.py"
+      "destination": "/api/chat.py"
     },
     {
       "source": "/api/tts",
-      "destination": "/api/index.py"
+      "destination": "/api/tts.py"
     }
   ]
 }
