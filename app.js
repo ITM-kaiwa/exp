@@ -26,8 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Global Audio Manager (Prevents double playback & handles stop/play)
   let currentAudio = null;
+  let currentUtterance = null;
   let currentActivePlayBtn = null;
-  let audioCache = new Map(); // Stores audio Base64 by message ID
+  let audioCache = new Map(); // Stores audio Base64 or fallback object by message ID
+
+  // Warm up SpeechSynthesis voices
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.getVoices();
+  }
 
   // 1. Initial API Key & UI Setup
   updateApiKeyStatusUI();
@@ -190,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4. API Calls (Gemini & Google Cloud TTS)
   async function fetchGeminiChat(prompt) {
-    // Try Vercel Serverless Python Backend /api/chat
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -203,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return data.text;
     } catch (apiErr) {
-      // Direct fallback if running pure static client with a custom key
       if (customApiKey) {
         const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey}`;
         const fbRes = await fetch(directUrl, {
@@ -223,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function fetchGoogleCloudTts(text, model) {
-    // Try Vercel Serverless Python Backend /api/tts
     try {
       const res = await fetch('/api/tts', {
         method: 'POST',
@@ -234,63 +237,57 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
+      if (data.fallbackToBrowserTts) {
+        return { fallbackText: text, notice: data.notice };
+      }
       return data.audioContent;
     } catch (apiErr) {
-      // Direct fallback if running pure static client with a custom key
-      if (customApiKey) {
-        const langCode = model.startsWith('en-') ? 'en-US' : 'ja-JP';
-        const directUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${customApiKey}`;
-        const directRes = await fetch(directUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { text: text },
-            voice: { languageCode: langCode, name: model },
-            audioConfig: { audioEncoding: 'MP3' }
-          })
-        });
-        if (directRes.ok) {
-          const data = await directRes.json();
-          return data.audioContent;
-        }
-      }
-      throw apiErr;
+      // Automatic client fallback to Web Speech TTS on network/API failure
+      return { fallbackText: text, notice: 'ブラウザ標準TTSエンジンに切り替えました。' };
     }
   }
 
   // 5. TTS Audio Synthesis & Playback Management
   async function synthesizeAndPlayTts(text, msgId, wrapperEl) {
-    // Capture current target TTS model for this message
     const modelForThisMessage = selectedTtsModel;
     const playBtn = wrapperEl.querySelector('.play-btn');
 
-    playBtn.textContent = '⏳ 音声生成中...';
+    playBtn.textContent = '⏳ 音声準備中...';
 
     try {
-      const audioContent = await fetchGoogleCloudTts(text, modelForThisMessage);
-      audioCache.set(msgId, audioContent);
+      const audioResult = await fetchGoogleCloudTts(text, modelForThisMessage);
+      audioCache.set(msgId, audioResult);
 
-      playBtn.innerHTML = `▶ 再生 (${modelForThisMessage.split('-').pop()})`;
+      const label = (typeof audioResult === 'object' && audioResult.fallbackText) 
+        ? '▶ 再生 (Web TTS)' 
+        : `▶ 再生 (${modelForThisMessage.split('-').pop()})`;
+      
+      playBtn.innerHTML = label;
 
       // Auto play generated audio
       playAudio(msgId, playBtn);
     } catch (err) {
       console.error('TTS Error:', err);
-      playBtn.innerHTML = `⚠️ 音声生成失敗`;
-      playBtn.style.opacity = '0.7';
-      addErrorMessage(`TTS(音声合成)エラー [モデル: ${modelForThisMessage}]: ${err.message || err}`);
+      // Fallback directly to browser speech synthesis
+      audioCache.set(msgId, { fallbackText: text });
+      playBtn.innerHTML = `▶ 再生 (Web TTS)`;
+      playAudio(msgId, playBtn);
     }
   }
 
   /**
    * Play Audio Function with Double-Playback Prevention (Specification ⑤)
    */
+  function isPlaying() {
+    return (currentAudio && !currentAudio.paused) || (window.speechSynthesis && window.speechSynthesis.speaking);
+  }
+
   function playAudio(msgId, playBtn) {
-    const audioBase64 = audioCache.get(msgId);
-    if (!audioBase64) return;
+    const audioData = audioCache.get(msgId);
+    if (!audioData) return;
 
     // Rule ⑤: Double click / repeated click stops playback
-    if (currentAudio && !currentAudio.paused) {
+    if (isPlaying()) {
       const isSameBtn = (currentActivePlayBtn === playBtn);
       stopCurrentAudio();
       
@@ -300,33 +297,69 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Initialize HTML5 Audio
-    currentAudio = new Audio('data:audio/mp3;base64,' + audioBase64);
     currentActivePlayBtn = playBtn;
-
     playBtn.classList.add('playing');
     playBtn.innerHTML = '⏸ 停止中';
 
-    currentAudio.play().catch(err => {
-      console.error('Audio play error:', err);
-      stopCurrentAudio();
-    });
+    if (typeof audioData === 'string') {
+      // 1. Google Cloud TTS MP3 Audio (Base64)
+      currentAudio = new Audio('data:audio/mp3;base64,' + audioData);
+      currentAudio.play().catch(err => {
+        console.error('Audio play error:', err);
+        stopCurrentAudio();
+      });
 
-    currentAudio.onended = () => {
-      resetPlayBtnState(playBtn);
-      currentAudio = null;
-      currentActivePlayBtn = null;
-    };
+      currentAudio.onended = () => {
+        resetPlayBtnState(playBtn);
+        currentAudio = null;
+        currentActivePlayBtn = null;
+      };
+    } else if (audioData && audioData.fallbackText) {
+      // 2. Web Speech API (Browser Standard Synthesis) Fallback
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(audioData.fallbackText);
+        utterance.lang = 'ja-JP';
+        utterance.rate = 1.0;
+
+        // Try selecting Japanese voice
+        const voices = window.speechSynthesis.getVoices();
+        const jaVoice = voices.find(v => v.lang.includes('ja') || v.lang.includes('JP'));
+        if (jaVoice) utterance.voice = jaVoice;
+
+        utterance.onend = () => {
+          resetPlayBtnState(playBtn);
+          currentUtterance = null;
+          currentActivePlayBtn = null;
+        };
+
+        utterance.onerror = (e) => {
+          console.error('SpeechSynthesis Error:', e);
+          stopCurrentAudio();
+        };
+
+        currentUtterance = utterance;
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert('お使いのブラウザは音声再生に対応していません。');
+        stopCurrentAudio();
+      }
+    }
   }
 
   function stopCurrentAudio() {
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
-      if (currentActivePlayBtn) {
-        resetPlayBtnState(currentActivePlayBtn);
-      }
       currentAudio = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      currentUtterance = null;
+    }
+    if (currentActivePlayBtn) {
+      resetPlayBtnState(currentActivePlayBtn);
       currentActivePlayBtn = null;
     }
   }

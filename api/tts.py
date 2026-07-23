@@ -28,12 +28,17 @@ class handler(BaseHTTPRequestHandler):
         model_name = body.get('model', 'ja-JP-Neural2-B')
         api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or body.get('apiKey', '')
 
-        if not api_key:
-            self._send_json({'error': 'Google API Keyが設定されていません。Vercel環境変数(GEMINI_API_KEY / GOOGLE_API_KEY)を設定するか、入力してください。'}, 400)
-            return
-
         if not text:
             self._send_json({'error': 'TTS対象のテキストが空です。'}, 400)
+            return
+
+        if not api_key:
+            # Fallback to browser TTS if no key provided
+            self._send_json({
+                'fallbackToBrowserTts': True,
+                'text': text,
+                'notice': 'API Keyが未設定のため、ブラウザ標準TTSエンジンを使用します。'
+            }, 200)
             return
 
         url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
@@ -52,10 +57,22 @@ class handler(BaseHTTPRequestHandler):
                 audio_content = res_body.get('audioContent', '')
                 self._send_json({'audioContent': audio_content}, 200)
         except urllib.error.HTTPError as e:
+            # Handle 401 / 403 API key authentication restrictions by falling back gracefully to Browser Speech Synthesis
+            if e.code in (401, 403):
+                self._send_json({
+                    'fallbackToBrowserTts': True,
+                    'text': text,
+                    'notice': f'Google Cloud TTS 認証制限({e.code})のため、ブラウザ音声合成(Web Speech TTS)へフォールバックしました。'
+                }, 200)
+                return
             err_data = e.read().decode('utf-8')
             self._send_json({'error': f"Google Cloud TTS API エラー ({e.code}): {err_data}"}, e.code)
         except Exception as e:
-            self._send_json({'error': f"TTSエラー: {str(e)}"}, 500)
+            self._send_json({
+                'fallbackToBrowserTts': True,
+                'text': text,
+                'notice': f'TTS例外({str(e)})のため、ブラウザ音声合成へフォールバックしました。'
+            }, 200)
 
     def _send_json(self, data, status_code=200):
         self.send_response(status_code)
