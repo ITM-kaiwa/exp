@@ -1,3 +1,4 @@
+import os
 import json
 import urllib.request
 import urllib.error
@@ -18,10 +19,14 @@ class handler(BaseHTTPRequestHandler):
         try:
             body = json.loads(post_data.decode('utf-8'))
             prompt = body.get('prompt', '')
-            api_key = body.get('apiKey', '')
+            
+            # Check environment variables first (GEMINI_API_KEY or GOOGLE_API_KEY), then fallback to body
+            api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or body.get('apiKey', '')
 
             if not api_key:
-                self._send_json({'error': 'Google API Keyが設定されていません。'}, 400)
+                self._send_json({
+                    'error': 'Google API Keyが設定されていません。Vercelの環境変数(GEMINI_API_KEY / GOOGLE_API_KEY)を設定するか、フロントエンドでキーを入力してください。'
+                }, 400)
                 return
 
             if not prompt:

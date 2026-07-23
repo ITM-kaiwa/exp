@@ -57,9 +57,9 @@
         </div>
 
         <div class="api-key-status" id="api-key-status" title="Google API Key Status">
-          <span class="status-dot unconfigured" id="status-dot"></span>
-          <span class="status-text" id="status-text">API Key: 未設定</span>
-          <button id="reset-key-btn" class="btn-reset-key hidden" title="API Keyをリセット">リセット</button>
+          <span class="status-dot configured" id="status-dot"></span>
+          <span class="status-text" id="status-text">Vercel環境変数 / カスタムKey</span>
+          <button id="reset-key-btn" class="btn-reset-key hidden" title="手動設定したAPI Keyをリセット">リセット</button>
         </div>
       </div>
     </header>
@@ -67,10 +67,10 @@
     <!-- Main Chat Window -->
     <main class="chat-window" id="chat-window">
       <div class="system-welcome-card" id="welcome-card">
-        <div class="welcome-icon">🔑</div>
-        <h2>Google API Keyの設定</h2>
-        <p>アプリを使用する前に、お持ちの <strong>Google API Key</strong> を下のチャット入力欄に入力し、<strong>送信ボタン</strong>を押してください。</p>
-        <div class="key-hint">※ API Keyはブラウザ内(localStorage)に安全に保存されます。</div>
+        <div class="welcome-icon">🎙️</div>
+        <h2>Gemini AI & TTS テストスタジオ</h2>
+        <p>Vercelの環境変数 (<code>GEMINI_API_KEY</code> または <code>GOOGLE_API_KEY</code>) を使用して動作します。<br>テキスト入力またはマイク音声入力で会話を始めてください！</p>
+        <div class="key-hint">※ 個別の API Key を使用したい場合は、入力欄に API Key を入力して送信すると手動設定が適用されます。</div>
       </div>
     </main>
 
@@ -82,7 +82,7 @@
       </div>
 
       <div class="input-container">
-        <input type="text" id="chat-input" class="chat-input" placeholder="メッセージを入力、またはAPI Keyを入力してください..." autocomplete="off">
+        <input type="text" id="chat-input" class="chat-input" placeholder="メッセージを入力、またはマイクで話しかけてください..." autocomplete="off">
         
         <button id="mic-btn" class="icon-btn mic-btn" title="音声入力 (マイク)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">

@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sttStatusBar = document.getElementById('stt-status-bar');
 
   // Application State
-  let apiKey = localStorage.getItem('google_api_key') || '';
+  let customApiKey = localStorage.getItem('google_api_key') || '';
   let selectedTtsModel = ttsSelect.value;
   let recognition = null;
   let isRecording = false;
@@ -40,27 +40,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // API Key Reset Listener
   resetKeyBtn.addEventListener('click', () => {
-    if (confirm('保存されているGoogle API Keyを削除しますか？')) {
+    if (confirm('保存されているカスタム API Keyを削除しますか？ (Vercelの環境変数が代わりに使用されます)')) {
       localStorage.removeItem('google_api_key');
-      apiKey = '';
+      customApiKey = '';
       updateApiKeyStatusUI();
-      addSystemMessage('Google API Keyがリセットされました。新しいAPI Keyを入力してください。');
+      addSystemMessage('カスタム API Keyが削除されました。Vercel環境変数を使用します。');
     }
   });
 
   function updateApiKeyStatusUI() {
-    if (apiKey) {
+    if (customApiKey) {
       statusDot.classList.remove('unconfigured');
       statusDot.classList.add('configured');
-      statusText.textContent = 'API Key: 設定済み';
+      statusText.textContent = 'API Key: カスタムKey使用';
       resetKeyBtn.classList.remove('hidden');
-      if (welcomeCard) welcomeCard.classList.add('hidden');
     } else {
-      statusDot.classList.remove('configured');
-      statusDot.classList.add('unconfigured');
-      statusText.textContent = 'API Key: 未設定';
+      statusDot.classList.remove('unconfigured');
+      statusDot.classList.add('configured');
+      statusText.textContent = 'API Key: Vercel環境変数';
       resetKeyBtn.classList.add('hidden');
-      if (welcomeCard) welcomeCard.classList.remove('hidden');
     }
   }
 
@@ -129,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   micBtn.addEventListener('click', toggleRecording);
 
-  // 3. Chat Logic & API Key Handler
+  // 3. Chat Logic & Message Handler
   sendBtn.addEventListener('click', handleSend);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -144,19 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chatInput.value = '';
 
-    // Step 1: If API key is not set yet (or user inputs an API key), treat submission as setting the API key!
-    if (!apiKey || text.startsWith('AIzaSy') || (text.length > 30 && !text.includes(' '))) {
-      // Validate or save API Key
-      apiKey = text;
-      localStorage.setItem('google_api_key', apiKey);
+    // Hide welcome card on first message
+    if (welcomeCard) welcomeCard.classList.add('hidden');
+
+    // Optional override: If user inputs an explicit API key string (starts with AIzaSy)
+    if (text.startsWith('AIzaSy') || (text.length > 30 && text.startsWith('key-'))) {
+      customApiKey = text;
+      localStorage.setItem('google_api_key', customApiKey);
       updateApiKeyStatusUI();
 
       addUserMessage(maskApiKey(text));
-      addSystemMessage('✅ Google API Keyが設定されました！チャットや音声合成(TTS)をご利用いただけます。');
+      addSystemMessage('✅ カスタム Google API Keyが設定されました！');
       return;
     }
 
-    // Step 2: Normal user chat message
+    // Normal user chat message
     addUserMessage(text);
 
     // Show AI loading bubble
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chatWindow.appendChild(aiBubbleWrapper);
     scrollToBottom();
 
-    // Call Gemini API via /api/chat (or fallback client REST)
+    // Call Gemini API via /api/chat
     try {
       const responseText = await fetchGeminiChat(text);
       
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, apiKey })
+        body: JSON.stringify({ prompt, apiKey: customApiKey })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -203,32 +203,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return data.text;
     } catch (apiErr) {
-      // Fallback: Direct client fetch to Gemini REST API
-      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const fbRes = await fetch(directUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-      if (!fbRes.ok) {
-        // Fallback to gemini-1.5-flash
-        const fbUrl15 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const fbRes15 = await fetch(fbUrl15, {
+      // Direct fallback if running pure static client with a custom key
+      if (customApiKey) {
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${customApiKey}`;
+        const fbRes = await fetch(directUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
         });
-        if (!fbRes15.ok) {
-          const errBody = await fbRes15.json();
-          throw new Error(errBody.error?.message || `Gemini API Error`);
+        if (fbRes.ok) {
+          const data = await fbRes.json();
+          return data.candidates[0].content.parts[0].text;
         }
-        const data15 = await fbRes15.json();
-        return data15.candidates[0].content.parts[0].text;
       }
-      const data = await fbRes.json();
-      return data.candidates[0].content.parts[0].text;
+      throw apiErr;
     }
   }
 
@@ -238,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model, apiKey })
+        body: JSON.stringify({ text, model, apiKey: customApiKey })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -246,24 +236,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return data.audioContent;
     } catch (apiErr) {
-      // Fallback: Direct client fetch to Google Cloud TTS REST API
-      const langCode = model.startsWith('en-') ? 'en-US' : 'ja-JP';
-      const directUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
-      const directRes = await fetch(directUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: { text: text },
-          voice: { languageCode: langCode, name: model },
-          audioConfig: { audioEncoding: 'MP3' }
-        })
-      });
-      if (!directRes.ok) {
-        const errBody = await directRes.json();
-        throw new Error(errBody.error?.message || `TTS API Error`);
+      // Direct fallback if running pure static client with a custom key
+      if (customApiKey) {
+        const langCode = model.startsWith('en-') ? 'en-US' : 'ja-JP';
+        const directUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${customApiKey}`;
+        const directRes = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text: text },
+            voice: { languageCode: langCode, name: model },
+            audioConfig: { audioEncoding: 'MP3' }
+          })
+        });
+        if (directRes.ok) {
+          const data = await directRes.json();
+          return data.audioContent;
+        }
       }
-      const data = await directRes.json();
-      return data.audioContent;
+      throw apiErr;
     }
   }
 
@@ -271,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function synthesizeAndPlayTts(text, msgId, wrapperEl) {
     // Capture current target TTS model for this message
     const modelForThisMessage = selectedTtsModel;
-    const controlsDiv = wrapperEl.querySelector('.audio-controls');
     const playBtn = wrapperEl.querySelector('.play-btn');
 
     playBtn.textContent = '⏳ 音声生成中...';
