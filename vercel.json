@@ -1,12 +1,42 @@
 {
-  "rewrites": [
+  "builds": [
     {
-      "source": "/api/chat",
-      "destination": "/api/chat.py"
+      "src": "api/*.py",
+      "use": "@vercel/python"
     },
     {
-      "source": "/api/tts",
-      "destination": "/api/tts.py"
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "style.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "app.js",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/chat",
+      "dest": "api/chat.py"
+    },
+    {
+      "src": "/api/tts",
+      "dest": "api/tts.py"
+    },
+    {
+      "src": "/style.css",
+      "dest": "style.css"
+    },
+    {
+      "src": "/app.js",
+      "dest": "app.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "index.html"
     }
   ]
 }
