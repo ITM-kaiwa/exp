@@ -13,29 +13,7 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        req_path = self.path.split('?')[0]
-        base_dir = os.path.dirname(__file__)
-        
-        if req_path.endswith('.css'):
-            filepath = os.path.join(base_dir, '..', 'public', 'style.css')
-            mime = 'text/css'
-        elif req_path.endswith('.js'):
-            filepath = os.path.join(base_dir, '..', 'public', 'app.js')
-            mime = 'application/javascript'
-        else:
-            filepath = os.path.join(base_dir, '..', 'public', 'index.html')
-            mime = 'text/html; charset=utf-8'
-
-        try:
-            with open(filepath, 'rb') as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header('Content-Type', mime)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(content)
-        except Exception as e:
-            self._send_json({'error': f'Static file not found: {str(e)}'}, 404)
+        self._send_json({'status': 'Gemini Chat API is running'}, 200)
 
     def do_POST(self):
         content_length = int(self.headers.get('Content-Length', 0))
@@ -46,12 +24,6 @@ class handler(BaseHTTPRequestHandler):
         except Exception:
             body = {}
 
-        if 'tts' in self.path:
-            self.handle_tts(body)
-        else:
-            self.handle_chat(body)
-
-    def handle_chat(self, body):
         prompt = body.get('prompt', '')
         api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or body.get('apiKey', '')
 
@@ -89,40 +61,6 @@ class handler(BaseHTTPRequestHandler):
             self._send_json({'error': f"Gemini API エラー ({e.code}): {err_data}"}, e.code)
         except Exception as e:
             self._send_json({'error': f"チャットエラー: {str(e)}"}, 500)
-
-    def handle_tts(self, body):
-        text = body.get('text', '')
-        model_name = body.get('model', 'ja-JP-Neural2-B')
-        api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or body.get('apiKey', '')
-
-        if not api_key:
-            self._send_json({'error': 'Google API Keyが設定されていません。Vercel環境変数(GEMINI_API_KEY / GOOGLE_API_KEY)を設定するか、入力してください。'}, 400)
-            return
-
-        if not text:
-            self._send_json({'error': 'TTS対象のテキストが空です。'}, 400)
-            return
-
-        url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
-        lang_code = "en-US" if model_name.startswith("en-") else "ja-JP"
-        payload = {
-            "input": {"text": text},
-            "voice": {"languageCode": lang_code, "name": model_name},
-            "audioConfig": {"audioEncoding": "MP3"}
-        }
-
-        req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
-
-        try:
-            with urllib.request.urlopen(req) as response:
-                res_body = json.loads(response.read().decode('utf-8'))
-                audio_content = res_body.get('audioContent', '')
-                self._send_json({'audioContent': audio_content}, 200)
-        except urllib.error.HTTPError as e:
-            err_data = e.read().decode('utf-8')
-            self._send_json({'error': f"Google Cloud TTS API エラー ({e.code}): {err_data}"}, e.code)
-        except Exception as e:
-            self._send_json({'error': f"TTSエラー: {str(e)}"}, 500)
 
     def _send_json(self, data, status_code=200):
         self.send_response(status_code)

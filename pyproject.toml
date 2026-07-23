@@ -5,6 +5,3 @@ description = "Speech-To-Text & Text-To-Speech Gemini Chat App"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
-
-[tool.vercel]
-entrypoint = "api.chat:handler"
